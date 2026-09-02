@@ -1,0 +1,61 @@
+# Continuous integration for the pseudofin test harness.
+#
+# WHY A SCAFFOLD ALREADY HAS ONE
+#
+# `pseudohcm` ran without a workflow for months. Its correctness rested entirely on the
+# consumer's integration suite, which pip-installs the harness from GitHub — so a fault
+# introduced here was invisible until published, and then failed in a repository that
+# had not changed. Three separate defects in the de-growth injectors would each have
+# surfaced that way.
+#
+# The workflow exists before the generator does, so that never applies here.
+#
+# THE ONE THING THIS HARNESS MUST NEVER LOSE
+#
+# Gate 7. Every emitted record carries the synthetic marker, and production ingestion
+# refuses anything carrying it. If `mark()` ever stopped stamping a record type, this
+# harness would become capable of loading into a customer database — and the product's
+# own tests would still pass, because they test the refusal, not the stamping.
+
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+env:
+  # Derived, not hardcoded. The existing harness does the same — a literal owner
+  # name breaks silently the moment a repository moves or is forked, and the
+  # failure reads as "the contract will not install" rather than "the URL is wrong".
+  CONTRACT: "git+https://github.com/${{ github.repository_owner }}/aiecona-adapter-contract.git"
+
+jobs:
+  harness:
+    name: Harness tests and marker coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+
+      - name: Install
+        run: |
+          pip install "$CONTRACT"
+          pip install -e ".[dev]" || pip install -e .
+          pip install pytest
+
+      # The marker is defined in the contract and read from there. If that import
+      # breaks, the poison pill is not applied and nothing else in this job would
+      # notice — the tests would simply have no marker to assert.
+      - name: The marker must be reachable, not silently absent
+        run: |
+          python -c "
+          from contract.markers import SYNTHETIC_MARKER_FIELD, SYNTHETIC_MARKER_VALUE
+          assert SYNTHETIC_MARKER_VALUE, 'the marker value is empty'
+          print('marker reachable:', SYNTHETIC_MARKER_FIELD)
+          "
+
+      - name: Harness tests
+        run: python -m pytest -q tests
