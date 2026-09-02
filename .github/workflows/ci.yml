@@ -16,6 +16,22 @@
 # refuses anything carrying it. If `mark()` ever stopped stamping a record type, this
 # harness would become capable of loading into a customer database — and the product's
 # own tests would still pass, because they test the refusal, not the stamping.
+#
+# PARITY WITH pseudohcm — D96
+#
+# D96 unified the separation controls on the PRODUCT side, so all four harnesses are
+# covered there rather than one. This file is the same repair from this side: two
+# checks `pseudohcm` has carried since D66 were absent here, and both apply to a
+# scaffold with no generator.
+#
+#   the harness cannot import the product   Gate 1, asserted from this side
+#   the package installs and imports        a packaging fault that an editable
+#   from outside its own checkout           install hides completely
+#
+# Three of `pseudohcm`'s checks are NOT here, and are deferred rather than dropped:
+# marker coverage across every emitted record, byte-identical regeneration from a seed,
+# and the de-growth scenario assertions. All three need a generator. Each belongs in
+# this file the day this emulator grows one, and this comment is what says so.
 
 name: CI
 
@@ -40,10 +56,20 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: "3.11" }
 
-      - name: Install
+      - name: Install the contract, then this package
         run: |
           pip install "$CONTRACT"
-          pip install -e ".[dev]" || pip install -e .
+          # NOT editable, and --no-deps deliberately.
+          #
+          # An editable install resolves `import pseudofin` to `src/`, so the package
+          # builds correctly on this machine whether or not it builds correctly at
+          # all — which is the exact fault the contract repository's own CI was
+          # written to catch, and it would pass here unnoticed.
+          #
+          # --no-deps because `pyproject.toml` declares aiecona-adapter-contract by
+          # name and it is not on PyPI. Resolving it would reach for a package that
+          # does not exist there. Installed from git in the step above instead.
+          pip install --no-deps .
           pip install pytest
 
       # The marker is defined in the contract and read from there. If that import
@@ -59,3 +85,34 @@ jobs:
 
       - name: Harness tests
         run: python -m pytest -q tests
+
+      # From /tmp. Inside the checkout, `import pseudofin` finds src/ whether or not the
+      # package was built correctly, so this has to run from somewhere else to mean
+      # anything at all.
+      - name: It imports from outside its own repository
+        working-directory: /tmp
+        run: |
+          python -c "
+          import pseudofin, pseudofin.marking
+          print('loaded from', pseudofin.marking.__file__)
+          assert 'site-packages' in pseudofin.marking.__file__, (
+              'imported src/ rather than the installed package')
+          "
+
+      # Gate 1, from this side. If this repository could ever import the product, the
+      # separation the whole design rests on would be gone and the deletion test in the
+      # consumer would be proving nothing — it checks that the product cannot reach a
+      # harness, not that a harness cannot reach the product.
+      #
+      # `pseudohcm` has asserted this since D66. The three ERP emulators scaffolded
+      # under D91 did not, which meant the claim held for one repository out of four.
+      - name: This repository cannot import the product
+        working-directory: /tmp
+        run: |
+          python -c "
+          import importlib.util, sys
+          if importlib.util.find_spec('aiecona') is not None:
+              sys.exit('the product is importable from the harness environment — '
+                       'Gate 1 has been breached from this side')
+          print('the product is not reachable from here, as intended')
+          "
