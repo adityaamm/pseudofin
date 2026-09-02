@@ -28,10 +28,15 @@
 #   the package installs and imports        a packaging fault that an editable
 #   from outside its own checkout           install hides completely
 #
-# Three of `pseudohcm`'s checks are NOT here, and are deferred rather than dropped:
-# marker coverage across every emitted record, byte-identical regeneration from a seed,
-# and the de-growth scenario assertions. All three need a generator. Each belongs in
-# this file the day this emulator grows one, and this comment is what says so.
+# THE THREE DEFERRED CHECKS ARE NOW HERE — D97.
+#
+# This file previously recorded three of `pseudohcm`'s checks as deferred rather than
+# dropped: marker coverage across every emitted record, byte-identical regeneration
+# from a seed, and the scenario assertions. All three needed a generator, and the note
+# said they belonged here the day this emulator grew one.
+#
+# It grew one. They are below, and the note is what made that a debt somebody paid
+# rather than a gap nobody remembered.
 
 name: CI
 
@@ -115,4 +120,127 @@ jobs:
               sys.exit('the product is importable from the harness environment — '
                        'Gate 1 has been breached from this side')
           print('the product is not reachable from here, as intended')
+          "
+
+      # Document 10 §3 — the harness's central claim. Same seed, same parameters,
+      # byte-identical output. Everything downstream that pins a count depends on it,
+      # and a generator that selected at random would break it silently.
+      - name: Generation is reproducible
+        working-directory: /tmp
+        run: |
+          python -c "
+          import json
+          from pseudofin.generator import Parameters, generate
+
+          def build():
+              c = generate(Parameters(units=4))
+              return json.dumps(c.counts(), sort_keys=True) + '|' + json.dumps(
+                  [m['metric_id'] for m in c.business_unit_metrics][:50])
+
+          first, second = build(), build()
+          assert first == second, 'two runs of the same seed produced different corpora'
+          print('reproducible:', first[:80], '...')
+          "
+
+      # Gate 7, from this side. The product refuses marked records; this asserts the
+      # records are actually marked. A record type that slipped through unmarked would
+      # be silently loadable into a customer database, and no test in the product could
+      # detect it — the product's tests prove the refusal works, not that the stamp was
+      # applied.
+      - name: Every emitted record carries the synthetic marker
+        working-directory: /tmp
+        run: |
+          python -c "
+          from contract.markers import SYNTHETIC_MARKER_FIELD, SYNTHETIC_MARKER_VALUE
+          from pseudofin.emit import ENTITY_FILES
+          from pseudofin.generator import Parameters, generate
+
+          corpus = generate(Parameters(units=4))
+          total = 0
+          unmarked = []
+          for entity, attribute in ENTITY_FILES.items():
+              rows = getattr(corpus, attribute)
+              assert rows, entity + ' is empty — this check would pass by vacancy'
+              for row in rows:
+                  total += 1
+                  if row.get(SYNTHETIC_MARKER_FIELD) != SYNTHETIC_MARKER_VALUE:
+                      unmarked.append((entity, row))
+          assert not unmarked, str(len(unmarked)) + ' record(s) carry no marker'
+          print('every record marked across', total, 'rows')
+          "
+
+      # Every metric states which way is good. `actual / plan` means nothing without
+      # it: a cost centre eleven per cent under budget and a sales unit eleven per cent
+      # under its number produce the same ratio and mean opposite things.
+      - name: Every metric states a direction
+        working-directory: /tmp
+        run: |
+          python -c "
+          from pseudofin.generator import Parameters, generate
+
+          corpus = generate(Parameters(units=4))
+          assert corpus.business_unit_metrics, 'no metrics — vacuous'
+          directions = {m['direction'] for m in corpus.business_unit_metrics}
+          assert directions <= {'HIGHER_IS_BETTER', 'LOWER_IS_BETTER'}, directions
+          assert len(directions) == 2, (
+              'every measure runs the same way, so a product could assume a direction '
+              'and stay green: ' + str(directions))
+          assert all(m['plan'] != 0 for m in corpus.business_unit_metrics), (
+              'a zero plan makes the ratio undefined and the schema refuses it')
+          print('directions present:', sorted(directions))
+          "
+
+      # The scenario this emulator exists for. D92: standardised, a year in which every
+      # unit missed plan by 18 to 42 per cent produces a scatter indistinguishable from
+      # a good year — which is why the ratio is reported alongside.
+      - name: The bad year still produces a bad year
+        working-directory: /tmp
+        run: |
+          python -c "
+          from datetime import date
+          from pseudofin.generator import Parameters, generate
+          from pseudofin.scenarios import inject_bad_year, inject_sole_metric
+
+          c = generate(Parameters(units=4, history_end=date(2025, 12, 31)))
+          revenue = [m for m in c.business_unit_metrics if m['metric_key'] == 'net_revenue']
+          assert any(m['actual'] >= m['plan'] for m in revenue), (
+              'the base corpus already contains a bad year — de-growth must be '
+              'injected, never generated, or every existing fixture changes shape')
+
+          r = inject_bad_year(c, year=2025)
+          assert r['units_affected'] == 4
+          assert r['worst_shortfall'] == 0.42 and r['best_shortfall'] == 0.18
+          for m in c.business_unit_metrics:
+              if date.fromisoformat(m['period_start']).year != 2025:
+                  continue
+              if m['direction'] == 'HIGHER_IS_BETTER':
+                  assert m['actual'] < m['plan']
+              else:
+                  assert m['actual'] > m['plan'], (
+                      'a cost above plan IS a miss — moving every actual one way would '
+                      'hand the cost centres a triumphant year mid-disaster')
+
+          s = inject_sole_metric(c, unit_code='CC-002')
+          assert s['rows_added'] > 0
+          print('bad year:', r['metrics_adjusted'], 'metrics |  sole metric:',
+                s['rows_added'], 'rows')
+          "
+
+      # A priority with no statement supports only the weakest linkage confidence, and
+      # D24 then suppresses rather than scores low. A corpus where every priority is
+      # richly written never exercises that path.
+      - name: The strategy set contains the awkward cases
+        working-directory: /tmp
+        run: |
+          python -c "
+          from pseudofin.generator import Parameters, generate
+
+          p = generate(Parameters(units=4)).strategic_priorities
+          assert p, 'no priorities — vacuous'
+          assert any(x['statement'] is None for x in p), 'none is statement-free'
+          assert all(x['statement'] != '' for x in p), (
+              'an empty string satisfies a NOT NULL check while carrying nothing')
+          assert any(x['stated_rank'] is None for x in p), (
+              'unranked is a real state and must not sort to last')
+          print('priorities:', len(p))
           "
