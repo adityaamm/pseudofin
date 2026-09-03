@@ -203,7 +203,11 @@ def generate(params: Parameters | None = None) -> Corpus:
             # Unranked is a real state and must not sort to last. One priority is left
             # unranked so the path exists in every corpus.
             "stated_rank": None if index == 0 else index,
-            "source_unit_id": None,
+            # D104. Same defect as pseudocrm's offering owner, in the priority set:
+            # the profile maps `owning_source_unit_code` from `owning_source_unit_id`,
+            # and this emitted `source_unit_id`. A priority owned by a unit would have
+            # arrived owned by none.
+            "owning_source_unit_id": None,
             "valid_from": params.history_start.isoformat(),
             "valid_to": None,
         }))
