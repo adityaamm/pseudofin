@@ -3,10 +3,20 @@ name = "pseudofin"
 version = "0.1.0"
 description = "Test harness for AIeConA — Financials. Never ships."
 requires-python = ">=3.11"
+# SPDX expression, per PEP 639. Declared here as well as in LICENSE so
+# that a package index and a dependency scanner both see it without
+# reading the repository.
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
 dependencies = ["aiecona-adapter-contract"]
 
 [build-system]
-requires = ["setuptools>=68"]
+# 77, not 68. PEP 639 — `license` as an SPDX string and `license-files`
+# — is only understood from setuptools 77. On 68 the licence metadata is
+# silently ignored, which would produce a wheel that declares no licence
+# while the repository declares one: the two disagreeing, quietly, which
+# is the shape this build spends its time eliminating.
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]

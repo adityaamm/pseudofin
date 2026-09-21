@@ -1,0 +1,23 @@
+pseudofin
+Copyright 2026 Aditya (github.com/adityaamm)
+
+A test harness for AIeConA HR. It emulates a synthetic financial system and
+generates SYNTHETIC records only.
+
+EVERY RECORD THIS SOFTWARE PRODUCES IS FABRICATED.
+
+No record originates from a real person, a real organisation, or any real
+system. Every record is stamped with a refusal marker so that the product it
+tests will reject it on sight if it ever reaches a production ingestion path.
+That refusal is a safety control, not a convention: see contract/markers.py in
+the AIeConA adapter contract, and the separation gates in the product.
+
+This software must not be used to populate, seed or demonstrate any live HR,
+payroll or workforce system. It is provided to make one claim checkable — that
+AIeConA HR is tested against generated data and never against real employee
+records.
+
+Licensed under the Apache License, Version 2.0. See LICENSE.
+
+AIeConA and AIeConA HR are names of the licensor. Section 6 of the License
+grants no right to use them.
