@@ -46,7 +46,7 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime, timezone
 
 from pseudofin.calendar import periods as calendar_periods
 from pseudofin.marking import mark
@@ -168,6 +168,16 @@ def generate(params: Parameters | None = None) -> Corpus:
                 comparable: bool | None = (
                     None if rng.random() < params.unstated_comparability else True)
                 corpus.business_unit_metrics.append(mark({
+                    # D125. WHEN WE CAME TO HOLD THIS FIGURE AS OUR CLAIM.
+                    #
+                    # Finance restates every close, and until this column existed a
+                    # restated figure overwrote the earlier version's validity window —
+                    # so a chart shown in March could not be reproduced after a Q1
+                    # restatement. The period close is the moment the figure became
+                    # ours, which is the honest reading and the one a source can state.
+                    "tx_from": datetime.combine(
+                        end, datetime.min.time(), tzinfo=timezone.utc).isoformat(),
+                    "tx_to": None,
                     "metric_id": f"BUM-{code}-{start.isoformat()}-{key}",
                     "source_unit_id": code,
                     "metric_key": key,
